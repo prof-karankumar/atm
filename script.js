@@ -15,12 +15,19 @@ const LOGIN_PASSWORD = "kumar";
 
 let isLoggedIn = false;
 
-function toggleTheme() {
-    if (!isLoggedIn) {
-        alert("Please login first.");
-        return;
+// Check saved login state on page load
+function checkSavedLogin() {
+    const savedLogin = localStorage.getItem("isLoggedIn");
+    if (savedLogin === "true") {
+        isLoggedIn = true;
+        document.getElementById("loginBtn").textContent = "Logout";
+        document.getElementById("loginModal").style.display = "none";
+        return true;
     }
+    return false;
+}
 
+function toggleTheme() {
     const body = document.body;
     const toggleIcon = document.querySelector(".theme-toggle i");
 
@@ -45,7 +52,7 @@ async function fetchAndCalculateDashboard() {
     }
 
     // Reset counts
-    dashboardData.totalActive = data.length;
+    dashboardData.totalActive = data.filter(e => e.event_status === 'Active').length;
     dashboardData.totalBroadcasted = data.filter(e => e.event_status === 'Broadcasted').length;
     dashboardData.totalUnbroadcasted = data.filter(e => e.event_status === 'Unbroadcasted').length;
     
@@ -101,26 +108,30 @@ function searchCards() {
 
 function loginUser() {
     isLoggedIn = true;
+    localStorage.setItem("isLoggedIn", "true");
 
     document.getElementById("loginModal").style.display = "none";
     document.getElementById("loginBtn").textContent = "Logout";
-
-    document.querySelectorAll("button, input, select, a").forEach(element => {
-        element.removeAttribute("disabled");
-    });
 
     fetchAndCalculateDashboard();
 }
 
 function logoutUser() {
     isLoggedIn = false;
+    localStorage.setItem("isLoggedIn", "false");
 
-    document.getElementById("loginModal").style.display = "flex";
     document.getElementById("loginBtn").textContent = "Login";
     document.getElementById("eventModal").style.display = "none";
 
     document.getElementById("username").value = "";
     document.getElementById("password").value = "";
+
+    // Refresh dashboard with 0 values since user is logged out
+    dashboardData.totalActive = 0;
+    dashboardData.totalBroadcasted = 0;
+    dashboardData.totalUnbroadcasted = 0;
+    dashboardData.upcoming = 0;
+    updateDashboardUI();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -129,6 +140,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedTheme === "light") {
         document.body.classList.add("light-mode");
         document.querySelector(".theme-toggle i").className = "fas fa-sun";
+    }
+
+    // Check if user was previously logged in
+    checkSavedLogin();
+
+    // If not logged in, show login modal automatically
+    if (!isLoggedIn) {
+        document.getElementById("loginModal").style.display = "flex";
     }
 
     const loginForm = document.getElementById("loginForm");
@@ -161,6 +180,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("searchInput").addEventListener("input", searchCards);
     document.getElementById("searchBtn").addEventListener("click", searchCards);
+
+    // Make dashboard cards clickable - each card goes to its filtered view
+    document.querySelectorAll(".card").forEach((card, index) => {
+        card.style.cursor = "pointer";
+        card.addEventListener("click", () => {
+            const filterMap = ["active", "broadcasted", "unbroadcasted", "upcoming"];
+            window.location.href = `total-events.html?filter=${filterMap[index]}`;
+        });
+    });
 
     const eventModal = document.getElementById("eventModal");
     const addEventNavBtn = document.getElementById("addEventNavBtn");
@@ -241,15 +269,31 @@ document.addEventListener("DOMContentLoaded", () => {
         alert(`Success! Event "${eventName}" has been added and saved to Supabase.`);
     });
 
-    document.querySelectorAll(".protected-link").forEach(link => {
-        link.addEventListener("click", event => {
+    // Home link - just stay on page, no logout
+    const homeLink = document.querySelector('a[href="#"].protected-link');
+    if (homeLink) {
+        homeLink.addEventListener("click", event => {
             event.preventDefault();
-
-            if (!isLoggedIn) {
-                alert("Please login first.");
-            }
+            // Home is already the current page, do nothing
         });
+    }
+
+    // Use visibilitychange event to refresh data when coming back to tab
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && isLoggedIn) {
+            fetchAndCalculateDashboard();
+        }
     });
 
-    fetchAndCalculateDashboard();
+    // Also refresh on focus
+    window.addEventListener('focus', () => {
+        if (isLoggedIn) {
+            fetchAndCalculateDashboard();
+        }
+    });
+
+    // Initial fetch only if logged in
+    if (isLoggedIn) {
+        fetchAndCalculateDashboard();
+    }
 });
