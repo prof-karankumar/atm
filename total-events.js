@@ -30,7 +30,30 @@ async function fetchAllEvents() {
         return;
     }
 
-    displayEvents(data);
+    // Get filter from URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const filter = urlParams.get('filter');
+
+    let filteredEvents = data;
+
+    if (filter === "active") {
+        filteredEvents = data.filter(e => e.event_status === 'Active');
+    } else if (filter === "broadcasted") {
+        filteredEvents = data.filter(e => e.event_status === 'Broadcasted');
+    } else if (filter === "unbroadcasted") {
+        filteredEvents = data.filter(e => e.event_status === 'Unbroadcasted');
+    } else if (filter === "upcoming") {
+        const now = new Date();
+        const threeDaysLater = new Date();
+        threeDaysLater.setDate(now.getDate() + 3);
+        filteredEvents = data.filter(e => {
+            if (!e.event_start_time) return false;
+            const eventDate = new Date(e.event_start_time);
+            return eventDate >= now && eventDate <= threeDaysLater;
+        });
+    }
+
+    displayEvents(filteredEvents);
 }
 
 function displayEvents(events) {
@@ -86,6 +109,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedTheme === "light") {
         document.body.classList.add("light-mode");
         document.querySelector(".theme-toggle i").className = "fas fa-sun";
+    }
+
+    // Update page title based on filter
+    const urlParams = new URLSearchParams(window.location.search);
+    const filter = urlParams.get('filter');
+    const titleEl = document.querySelector(".dashboard-title h1");
+    if (titleEl) {
+        const titles = {
+            "active": "ACTIVE EVENTS",
+            "broadcasted": "BROADCASTED EVENTS",
+            "unbroadcasted": "UNBROADCASTED EVENTS",
+            "upcoming": "UPCOMING EVENTS (3 Days)"
+        };
+        if (filter && titles[filter]) {
+            titleEl.textContent = titles[filter];
+        } else {
+            titleEl.textContent = "ALL EVENTS";
+        }
     }
 
     fetchAllEvents();
