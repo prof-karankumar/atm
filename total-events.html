@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Total Events - TicketPortal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <h1>🎫 TicketPortal</h1>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="total-events.html" style="color: #026CDF; font-weight: 700;">Total Events</a>
+            <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Dashboard Title -->
+    <div class="dashboard-title">
+        <h1>ALL EVENTS</h1>
+        <p style="color: var(--subtext-color); font-size: 1rem; margin-top: 0.5rem;">Click on any event card or Details button to view full information</p>
+    </div>
+
+    <!-- Events Grid -->
+    <div class="container" id="eventsGrid">
+        <div class="card">
+            <h2>Loading events...</h2>
+        </div>
+    </div>
+
+    <script src="total-events.js"></script>
+</body>
+</html>
