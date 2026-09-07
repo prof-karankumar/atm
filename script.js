@@ -102,12 +102,17 @@ function logoutUser() {
 
     document.getElementById("username").value = "";
     document.getElementById("password").value = "";
+    document.getElementById("loginError").style.display = "none";
 
     dashboardData.totalAll = 0;
     dashboardData.totalBroadcasted = 0;
     dashboardData.totalUnbroadcasted = 0;
     dashboardData.upcoming = 0;
     updateDashboardUI();
+
+    // Show the login form immediately after logout; no refresh is needed.
+    document.getElementById("loginModal").style.display = "flex";
+    document.getElementById("username").focus();
 }
 
 function showPortalToast(message, type = "success") {
