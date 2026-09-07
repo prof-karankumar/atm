@@ -1,36 +1,57 @@
-const SUPABASE_URL = 'https://zftjzlootkvnquwiwsic.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Olfff104V9bCod1UkTbwyA_VgMLB3IE';
-
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 let currentEvent = null;
 
 function toggleTheme() {
-    const body = document.body;
-    const toggleIcon = document.querySelector(".theme-toggle i");
-    body.classList.toggle("light-mode");
-    if (body.classList.contains("light-mode")) {
-        toggleIcon.className = "fas fa-sun";
-        localStorage.setItem("theme", "light");
-    } else {
-        toggleIcon.className = "fas fa-moon";
-        localStorage.setItem("theme", "dark");
-    }
+    document.body.classList.toggle("light-mode");
+
+    const icon = document.querySelector(".theme-toggle i");
+    const isLight = document.body.classList.contains("light-mode");
+
+    icon.className = isLight ? "fas fa-sun" : "fas fa-moon";
+    localStorage.setItem("theme", isLight ? "light" : "dark");
 }
 
-async function loadEventDetails() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const eventId = urlParams.get('id');
+function escapeHTML(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function formatDate(value, includeTime = false) {
+    if (!value) return "N/A";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+
+    return date.toLocaleString([], includeTime
+        ? { dateStyle: "medium", timeStyle: "short" }
+        : { dateStyle: "medium" }
+    );
+}
+
+function getLocalEvents() {
+    return JSON.parse(localStorage.getItem("local_events") || "[]");
+}
+
+function saveLocalEvents(events) {
+    localStorage.setItem("local_events", JSON.stringify(events));
+}
+
+function loadEventDetails() {
+    const eventId = new URLSearchParams(window.location.search).get("id");
 
     if (!eventId) {
-        document.getElementById("eventContent").innerHTML = `<p style="color: var(--subtext-color);">No event ID provided. <a href="total-events.html" style="color: #026CDF;">Go back</a></p>`;
+        showMessage("No event ID provided.");
         return;
     }
 
-    const { data, error } = await _supabase.from('events').select('*').eq('id', eventId).single();
+    const events = getLocalEvents();
+    const data = events.find(e => String(e.id) === String(eventId));
 
-    if (error || !data) {
-        document.getElementById("eventContent").innerHTML = `<p style="color: var(--subtext-color);">Event not found. <a href="total-events.html" style="color: #026CDF;">Go back</a></p>`;
+    if (!data) {
+        showMessage("Event not found.");
         return;
     }
 
@@ -38,88 +59,112 @@ async function loadEventDetails() {
     renderEventDetails(data);
 }
 
+function showMessage(message) {
+    document.getElementById("eventContent").innerHTML = `
+        <p style="color: var(--subtext-color);">
+            ${escapeHTML(message)}
+            <a href="total-events.html" style="color: #026CDF;">Go back</a>
+        </p>
+    `;
+}
+
 function renderEventDetails(event) {
     const container = document.getElementById("eventContent");
+    const fallbackImage = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmM8P5uvVCt-8ZlBmd2qmlJK-C7RpM07uW06KF_uMeKA&s=10";
+    const imageUrl = event.event_image_url || fallbackImage;
 
-    const statusColor = event.event_status === "Active" ? "#4CAF50" : 
-                       event.event_status === "Broadcasted" ? "#026CDF" : "#FF9800";
+    const statusColor = event.event_status === "Active"
+        ? "#4CAF50"
+        : event.event_status === "Broadcasted"
+            ? "#026CDF"
+            : "#FF9800";
 
-    const eventDate = event.event_start_time ? new Date(event.event_start_time).toLocaleString() : "N/A";
-    const transferDate = event.transfer_date ? new Date(event.transfer_date).toLocaleDateString() : "N/A";
+    const safeEventUrl = event.event_url
+        ? escapeHTML(event.event_url)
+        : "";
 
     container.innerHTML = `
-        <!-- Hero Image -->
-        <div class="event-hero" style="background-image: url('${event.event_image_url || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmM8P5uvVCt-8ZlBmd2qmlJK-C7RpM07uW06KF_uMeKA&s=10"}')">
+        <div class="event-hero" style="background-image: url('${escapeHTML(imageUrl)}')">
             <div class="event-hero-content">
-                <h1>${event.event_name || "Unknown Event"}</h1>
-                <span class="status-badge" style="background: ${statusColor};">${event.event_status}</span>
+                <h1>${escapeHTML(event.event_name || "Unknown Event")}</h1>
             </div>
         </div>
 
-        <!-- Event Info -->
         <div class="event-info-card">
             <h3><i class="fas fa-info-circle"></i> Event Information</h3>
+
             <div class="info-grid">
                 <div class="info-item">
                     <span class="label">Event Name</span>
-                    <span class="value">${event.event_name || "N/A"}</span>
+                    <span class="value">${escapeHTML(event.event_name || "N/A")}</span>
                 </div>
+
                 <div class="info-item">
                     <span class="label">Venue</span>
-                    <span class="value">${event.venue_name || "N/A"}</span>
+                    <span class="value">${escapeHTML(event.venue_name || "N/A")}</span>
                 </div>
-                <div class="info-item">
-                    <span class="label">Event Date & Time</span>
-                    <span class="value">${eventDate}</span>
-                </div>
+
                 <div class="info-item">
                     <span class="label">Mapping ID</span>
-                    <span class="value">${event.event_mapping_id || "N/A"}</span>
+                    <span class="value">${escapeHTML(event.event_mapping_id || "N/A")}</span>
                 </div>
+
+                <div class="info-item">
+                    <span class="label">Event Link</span>
+                    ${
+                        safeEventUrl
+                            ? `<a href="${safeEventUrl}" target="_blank" rel="noopener" style="color: #58a6ff; word-break: break-all;">
+                                Open Event Link
+                               </a>`
+                            : `<span class="value">N/A</span>`
+                    }
+                </div>
+
                 <div class="info-item">
                     <span class="label">Event ID</span>
-                    <span class="value">${event.event_id || "N/A"}</span>
+                    <span class="value">${escapeHTML(event.event_id || "N/A")}</span>
                 </div>
+
+                <div class="info-item">
+                    <span class="label">Event Date & Time</span>
+                    <span class="value">${formatDate(event.event_start_time, true)}</span>
+                </div>
+
                 <div class="info-item">
                     <span class="label">Transfer Date</span>
-                    <span class="value">${transferDate}</span>
+                    <span class="value">${formatDate(event.transfer_date)}</span>
                 </div>
+
                 <div class="info-item">
                     <span class="label">List Cost %</span>
-                    <span class="value">${event.list_cost_percentage || 0}%</span>
+                    <span class="value">${escapeHTML(event.list_cost_percentage ?? 0)}%</span>
                 </div>
+
                 <div class="info-item">
                     <span class="label">Status</span>
-                    <span class="value" style="color: ${statusColor}; font-weight: 600;">${event.event_status}</span>
+                    <span class="value" style="color: ${statusColor}; font-weight: 600;">
+                        ${escapeHTML(event.event_status || "N/A")}
+                    </span>
                 </div>
             </div>
-            
-            ${event.event_url ? `
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--card-border);">
-                <span class="label">Event URL</span>
-                <a href="${event.event_url}" target="_blank" style="display: block; color: #026CDF; margin-top: 0.3rem; word-break: break-all;">
-                    <i class="fas fa-external-link-alt"></i> ${event.event_url}
-                </a>
-            </div>
-            ` : ""}
         </div>
 
-        <!-- Actions -->
         <div class="event-info-card">
             <h3><i class="fas fa-cog"></i> Event Actions</h3>
+
             <div class="action-buttons">
-                <button class="action-btn active-btn" onclick="updateStatus('Active')">
-                    <i class="fas fa-play"></i> Active
-                </button>
                 <button class="action-btn broadcast-btn" onclick="updateStatus('Broadcasted')">
                     <i class="fas fa-broadcast-tower"></i> Broadcast
                 </button>
+
                 <button class="action-btn stop-btn" onclick="updateStatus('Unbroadcasted')">
                     <i class="fas fa-stop"></i> Stop Broadcast
                 </button>
+
                 <button class="action-btn edit-btn" onclick="openEditModal()">
                     <i class="fas fa-edit"></i> Edit
                 </button>
+
                 <button class="action-btn delete-btn" onclick="deleteEvent()">
                     <i class="fas fa-trash"></i> Delete Event
                 </button>
@@ -128,41 +173,39 @@ function renderEventDetails(event) {
     `;
 }
 
-async function updateStatus(newStatus) {
+function updateStatus(newStatus) {
     if (!currentEvent) return;
 
-    const { error } = await _supabase
-        .from('events')
-        .update({ event_status: newStatus })
-        .eq('id', currentEvent.id);
+    const events = getLocalEvents();
+    const index = events.findIndex(e => String(e.id) === String(currentEvent.id));
 
-    if (error) {
-        alert("Failed to update status: " + error.message);
+    if (index === -1) {
+        alert("Event not found.");
         return;
     }
 
-    currentEvent.event_status = newStatus;
+    events[index].event_status = newStatus;
+    saveLocalEvents(events);
+
+    currentEvent = events[index];
     renderEventDetails(currentEvent);
+
+    showPortalToast(
+        `Successfully ${newStatus === "Broadcasted" ? "broadcasted" : "unbroadcasted"} event.`,
+        newStatus === "Broadcasted" ? "broadcast-success" : "unbroadcast-success"
+    );
 }
 
-async function deleteEvent() {
+function deleteEvent() {
     if (!currentEvent) return;
 
-    if (!confirm("Are you sure you want to delete this event? This cannot be undone.")) {
-        return;
-    }
+    const confirmed = confirm("Are you sure you want to delete this event? This cannot be undone.");
+    if (!confirmed) return;
 
-    const { error } = await _supabase
-        .from('events')
-        .delete()
-        .eq('id', currentEvent.id);
+    const events = getLocalEvents().filter(e => String(e.id) !== String(currentEvent.id));
+    saveLocalEvents(events);
 
-    if (error) {
-        alert("Failed to delete event: " + error.message);
-        return;
-    }
-
-    alert("Event deleted successfully!");
+    alert("Event deleted successfully.");
     window.location.href = "total-events.html";
 }
 
@@ -173,25 +216,114 @@ function openEditModal() {
     document.getElementById("editEventMappingID").value = currentEvent.event_mapping_id || "";
     document.getElementById("editVenueName").value = currentEvent.venue_name || "";
     document.getElementById("editEventID").value = currentEvent.event_id || "";
-    
-    // Format datetime-local value
+
     if (currentEvent.event_start_time) {
-        const d = new Date(currentEvent.event_start_time);
-        const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-        document.getElementById("editEventStartTime").value = local;
+        const date = new Date(currentEvent.event_start_time);
+        const localDate = new Date(
+            date.getTime() - date.getTimezoneOffset() * 60000
+        ).toISOString().slice(0, 16);
+
+        document.getElementById("editEventStartTime").value = localDate;
+    } else {
+        document.getElementById("editEventStartTime").value = "";
     }
-    
-    document.getElementById("editTransferDate").value = currentEvent.transfer_date ? currentEvent.transfer_date.slice(0, 10) : "";
-    document.getElementById("editListCost").value = currentEvent.list_cost_percentage || "";
-    document.getElementById("editEventStatus").value = currentEvent.event_status || "Active";
+
+    document.getElementById("editTransferDate").value =
+        currentEvent.transfer_date ? currentEvent.transfer_date.slice(0, 10) : "";
+
+    document.getElementById("editListCost").value = currentEvent.list_cost_percentage ?? "";
+    document.getElementById("editEventStatus").value = currentEvent.event_status || "Unbroadcasted";
     document.getElementById("editEventURL").value = currentEvent.event_url || "";
     document.getElementById("editEventImageURL").value = currentEvent.event_image_url || "";
 
     document.getElementById("editModal").style.display = "flex";
 }
 
+function showPortalToast(message, type = "success") {
+    const toast = document.createElement("div");
+    toast.className = `portal-toast ${type}`;
+    toast.innerHTML = `<i class="fas ${type === "success" ? "fa-circle-check" : "fa-circle-exclamation"}"></i><span>${message}</span>`;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.classList.add("hide"); setTimeout(() => toast.remove(), 300); }, 3500);
+}
+
+function setupBulkActions() {
+    const toggle = document.getElementById("bulkActionToggle");
+    const menu = document.getElementById("bulkActionMenu");
+    if (!toggle || !menu) return;
+    toggle.addEventListener("click", () => {
+        const isOpen = menu.classList.toggle("open");
+        toggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelectorAll("[data-bulk-status]").forEach(button => {
+        button.addEventListener("click", () => {
+            const status = button.dataset.bulkStatus;
+            if (status === "Broadcasted" || status === "Unbroadcasted") {
+                openBulkPasswordModal(status);
+            } else {
+                updateAllEvents(status);
+            }
+        });
+    });
+}
+
+function updateAllEvents(status) {
+    const events = getLocalEvents().map(e => ({ ...e, event_status: status }));
+    saveLocalEvents(events);
+
+    showPortalToast(
+        `Successfully ${status === "Broadcasted" ? "broadcasted" : "unbroadcasted"} all events.`,
+        status === "Broadcasted" ? "broadcast-success" : "unbroadcast-success"
+    );
+    loadEventDetails();
+}
+
+function openBulkPasswordModal(status) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay bulk-password-modal";
+    overlay.innerHTML = `<div class="modal-content" style="max-width:420px"><div class="modal-header"><h2><i class="fas fa-lock"></i> Confirm Bulk Action</h2><button class="close-btn" type="button">&times;</button></div><p class="modal-subtitle">Enter the security password to update all events.</p><form><div class="form-group"><label for="bulkPassword">Password</label><input type="password" id="bulkPassword" autocomplete="off" required></div><p class="bulk-password-error" style="display:none;color:#ff5555;margin-top:1rem">Invalid password.</p><button type="submit" class="submit-event-btn"><i class="fas fa-check"></i> Confirm</button></form></div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector(".close-btn").addEventListener("click", close);
+    overlay.addEventListener("click", event => { if (event.target === overlay) close(); });
+    overlay.querySelector("form").addEventListener("submit", event => {
+        event.preventDefault();
+        const errorEl = overlay.querySelector(".bulk-password-error");
+        if (overlay.querySelector("#bulkPassword").value !== "aws-atm") { errorEl.style.display = "block"; return; }
+        
+        updateAllEvents(status);
+        close();
+    });
+}
+
+function setupSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebarOverlay");
+    const menuButton = document.getElementById("menuToggleBtn");
+    const closeButton = document.getElementById("sidebarCloseBtn");
+
+    if (!sidebar || !overlay || !menuButton) return;
+
+    const closeSidebar = () => {
+        sidebar.classList.remove("open");
+        overlay.classList.remove("open");
+        menuButton.setAttribute("aria-expanded", "false");
+    };
+
+    menuButton.addEventListener("click", () => {
+        sidebar.classList.add("open");
+        overlay.classList.add("open");
+        menuButton.setAttribute("aria-expanded", "true");
+    });
+    closeButton?.addEventListener("click", closeSidebar);
+    overlay.addEventListener("click", closeSidebar);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    setupSidebar();
+    setupBulkActions();
     const savedTheme = localStorage.getItem("theme");
+
     if (savedTheme === "light") {
         document.body.classList.add("light-mode");
         document.querySelector(".theme-toggle i").className = "fas fa-sun";
@@ -199,38 +331,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
     loadEventDetails();
 
-    // Edit form submission
-    document.getElementById("editForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
+    document.getElementById("editForm").addEventListener("submit", event => {
+        event.preventDefault();
 
         if (!currentEvent) return;
 
         const updatedData = {
-            event_name: document.getElementById("editEventName").value,
-            event_mapping_id: document.getElementById("editEventMappingID").value,
-            venue_name: document.getElementById("editVenueName").value,
-            event_id: document.getElementById("editEventID").value,
+            ...currentEvent,
+            event_name: document.getElementById("editEventName").value.trim(),
+            event_mapping_id: document.getElementById("editEventMappingID").value.trim(),
+            venue_name: document.getElementById("editVenueName").value.trim(),
+            event_id: document.getElementById("editEventID").value.trim(),
             event_start_time: document.getElementById("editEventStartTime").value,
             transfer_date: document.getElementById("editTransferDate").value,
-            list_cost_percentage: parseFloat(document.getElementById("editListCost").value),
+            list_cost_percentage: Number(document.getElementById("editListCost").value),
             event_status: document.getElementById("editEventStatus").value,
-            event_url: document.getElementById("editEventURL").value,
-            event_image_url: document.getElementById("editEventImageURL").value
+            event_url: document.getElementById("editEventURL").value.trim(),
+            event_image_url: document.getElementById("editEventImageURL").value.trim()
         };
 
-        const { error } = await _supabase
-            .from('events')
-            .update(updatedData)
-            .eq('id', currentEvent.id);
+        const events = getLocalEvents();
+        const index = events.findIndex(e => String(e.id) === String(currentEvent.id));
 
-        if (error) {
-            alert("Failed to update event: " + error.message);
-            return;
+        if (index !== -1) {
+            events[index] = updatedData;
+            saveLocalEvents(events);
+            currentEvent = updatedData;
         }
 
         document.getElementById("editModal").style.display = "none";
-        currentEvent = { ...currentEvent, ...updatedData };
         renderEventDetails(currentEvent);
-        alert("Event updated successfully!");
+        alert("Event updated successfully.");
     });
 });
