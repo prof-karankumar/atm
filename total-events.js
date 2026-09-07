@@ -1,133 +1,342 @@
-const SUPABASE_URL = 'https://zftjzlootkvnquwiwsic.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Olfff104V9bCod1UkTbwyA_VgMLB3IE';
+let allEvents = [];
+let selectedFilter = "";
 
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+function getLocalEvents() {
+    return JSON.parse(localStorage.getItem("local_events") || "[]");
+}
 
-const LOGIN_USERNAME = "karan";
-const LOGIN_PASSWORD = "kumar";
+function saveLocalEvents(events) {
+    localStorage.setItem("local_events", JSON.stringify(events));
+}
 
 function toggleTheme() {
-    const body = document.body;
-    const toggleIcon = document.querySelector(".theme-toggle i");
+    document.body.classList.toggle("light-mode");
 
-    body.classList.toggle("light-mode");
+    const icon = document.querySelector(".theme-toggle i");
+    const isLight = document.body.classList.contains("light-mode");
 
-    if (body.classList.contains("light-mode")) {
-        toggleIcon.className = "fas fa-sun";
-        localStorage.setItem("theme", "light");
-    } else {
-        toggleIcon.className = "fas fa-moon";
-        localStorage.setItem("theme", "dark");
+    icon.className = isLight ? "fas fa-sun" : "fas fa-moon";
+    localStorage.setItem("theme", isLight ? "light" : "dark");
+}
+
+function escapeHTML(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function getSafeUrl(value) {
+    const url = String(value || "").trim();
+
+    if (!url) return "";
+
+    try {
+        const parsedUrl = new URL(url);
+
+        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+            return "";
+        }
+
+        return escapeHTML(parsedUrl.href);
+    } catch {
+        return "";
     }
 }
 
-async function fetchAllEvents() {
-    const { data, error } = await _supabase.from('events').select('*').order('event_start_time', { ascending: false });
-
-    if (error) {
-        console.error("Error fetching events:", error.message);
-        document.getElementById("eventsGrid").innerHTML = `<div class="card"><h2>Error loading events</h2></div>`;
-        return;
+function applySelectedFilter(events) {
+    if (selectedFilter === "broadcasted") {
+        return events.filter(event => event.event_status === "Broadcasted");
     }
 
-    // Get filter from URL parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const filter = urlParams.get('filter');
+    if (selectedFilter === "unbroadcasted") {
+        return events.filter(event => event.event_status === "Unbroadcasted");
+    }
 
-    let filteredEvents = data;
-
-    if (filter === "active") {
-        filteredEvents = data.filter(e => e.event_status === 'Active');
-    } else if (filter === "broadcasted") {
-        filteredEvents = data.filter(e => e.event_status === 'Broadcasted');
-    } else if (filter === "unbroadcasted") {
-        filteredEvents = data.filter(e => e.event_status === 'Unbroadcasted');
-    } else if (filter === "upcoming") {
+    if (selectedFilter === "upcoming") {
         const now = new Date();
         const threeDaysLater = new Date();
         threeDaysLater.setDate(now.getDate() + 3);
-        filteredEvents = data.filter(e => {
-            if (!e.event_start_time) return false;
-            const eventDate = new Date(e.event_start_time);
+
+        return events.filter(event => {
+            if (!event.event_start_time) return false;
+
+            const eventDate = new Date(event.event_start_time);
             return eventDate >= now && eventDate <= threeDaysLater;
         });
     }
 
-    displayEvents(filteredEvents);
+    return events;
+}
+
+function fetchAllEvents() {
+    const data = getLocalEvents();
+
+    data.sort((a, b) => {
+        const dateA = new Date(a.event_start_time || 0);
+        const dateB = new Date(b.event_start_time || 0);
+        return dateB - dateA;
+    });
+
+    allEvents = data;
+    displayEvents(applySelectedFilter(allEvents));
 }
 
 function displayEvents(events) {
     const grid = document.getElementById("eventsGrid");
 
-    if (!events || events.length === 0) {
-        grid.innerHTML = `<div class="card"><h2>No events found. Add events from Home page!</h2></div>`;
+    if (!events.length) {
+        grid.innerHTML = `
+            <div class="card">
+                <h2>No events found.</h2>
+            </div>
+        `;
         return;
     }
 
     grid.innerHTML = "";
 
-    events.forEach(event => {
+    events.forEach(eventData => {
         const card = document.createElement("div");
         card.className = "card";
-        card.style.backgroundImage = `url('${event.event_image_url || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmM8P5uvVCt-8ZlBmd2qmlJK-C7RpM07uW06KF_uMeKA&s=10"}')`;
+        card.title = eventData.event_name || "View event details";
+        card.setAttribute(
+            "aria-label",
+            `View ${eventData.event_name || "event"} details`
+        );
 
-        const statusColor = event.event_status === "Active" ? "#4CAF50" : 
-                           event.event_status === "Broadcasted" ? "#026CDF" : "#FF9800";
+        const imageUrl = eventData.event_image_url ||
+            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmM8P5uvVCt-8ZlBmd2qmlJK-C7RpM07uW06KF_uMeKA&s=10";
 
-        // Click on card to go to event details page
+        card.style.backgroundImage = `url('${imageUrl.replace(/'/g, "%27")}')`;
         card.style.cursor = "pointer";
 
+        const safeEventUrl = getSafeUrl(eventData.event_url);
+        const status = eventData.event_status || "Unbroadcasted";
+        const isBroadcasted = status === "Broadcasted";
+        const statusColor = isBroadcasted ? "#4CAF50" : "#ff4444";
+
         card.innerHTML = `
-            <div style="position: relative; z-index: 2; width: 100%;">
-                <h2 style="margin-bottom: 0.5rem; font-size: 1rem; text-align: left; background: rgba(0,0,0,0.6);">
-                    <span style="font-size: 1.2rem; display: block; margin-bottom: 2px;">${event.event_name || "Unknown Event"}</span>
-                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">Venue: ${event.venue_name || "N/A"}</span>
-                </h2>
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-                    <span style="background: ${statusColor}; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.75rem; color: white; font-weight: 600;">
-                        ${event.event_status}
-                    </span>
-                    <button onclick="event.stopPropagation(); window.location.href='event-details.html?id=${event.id}'" style="background: #026CDF; border: none; color: white; padding: 0.3rem 0.8rem; border-radius: 20px; cursor: pointer; font-size: 0.75rem; font-weight: 600; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <i class="fas fa-info-circle"></i> Details
-                    </button>
+            <div style="
+                position: absolute;
+                inset: 0;
+                z-index: 2;
+                display: flex;
+                align-items: flex-end;
+                padding: 1.2rem;
+                background: linear-gradient(
+                    to top,
+                    rgba(0, 0, 0, 0.95),
+                    rgba(0, 0, 0, 0.25) 75%,
+                    transparent
+                );
+                pointer-events: none;
+            ">
+                <div style="
+                    width: 100%;
+                    color: #ffffff;
+                    text-shadow: 0 2px 5px rgba(0,0,0,0.8);
+                ">
+                    <div style="
+                        font-size: 1.1rem;
+                        font-weight: 700;
+                        margin-bottom: 0.5rem;
+                    ">
+                        ${escapeHTML(eventData.event_name || "N/A")}
+                    </div>
+
+                    <div style="font-size: 0.85rem; margin-top: 0.25rem;">
+                        <strong>Venue:</strong>
+                        ${escapeHTML(eventData.venue_name || "N/A")}
+                    </div>
+
+                    <div style="font-size: 0.85rem; margin-top: 0.25rem;">
+                        <strong>Mapping ID:</strong>
+                        ${escapeHTML(eventData.event_mapping_id || "N/A")}
+                    </div>
+
+                    <div style="font-size: 0.85rem; margin-top: 0.25rem;">
+                        <strong>Event Link:</strong>
+                        ${
+                            safeEventUrl
+                                ? `
+                                    <a
+                                        href="${safeEventUrl}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style="
+                                            color: #58a6ff;
+                                            text-decoration: underline;
+                                            pointer-events: auto;
+                                            word-break: break-all;
+                                        "
+                                        onclick="event.stopPropagation()"
+                                    >
+                                        Open Link
+                                    </a>
+                                `
+                                : "N/A"
+                        }
+                    </div>
+
+                    <div style="
+                        color: ${statusColor};
+                        font-size: 0.78rem;
+                        font-weight: 700;
+                        margin-top: 0.6rem;
+                    ">
+                        ● ${escapeHTML(status)}
+                    </div>
                 </div>
-                ${event.event_url ? `<a href="${event.event_url}" target="_blank" style="display: block; margin-top: 0.5rem; color: #026CDF; font-size: 0.75rem; text-align: center; background: rgba(0,0,0,0.4); padding: 0.3rem; border-radius: 10px;"><i class="fas fa-external-link-alt"></i> Event Link</a>` : ""}
             </div>
         `;
 
-        // Click on card goes to details page
         card.addEventListener("click", () => {
-            window.location.href = `event-details.html?id=${event.id}`;
+            window.location.href =
+                `event-details.html?id=${encodeURIComponent(eventData.id)}`;
         });
 
         grid.appendChild(card);
     });
 }
 
+function searchCards() {
+    const searchTerm = document
+        .getElementById("searchInput")
+        .value
+        .trim()
+        .toLowerCase();
+
+    const filteredEvents = applySelectedFilter(allEvents).filter(eventData => {
+        const searchableText = [
+            eventData.event_name,
+            eventData.event_mapping_id,
+            eventData.event_url,
+            eventData.venue_name
+        ]
+            .map(value => String(value || "").toLowerCase())
+            .join(" ");
+
+        return searchableText.includes(searchTerm);
+    });
+
+    displayEvents(filteredEvents);
+}
+
+function showPortalToast(message, type = "success") {
+    const toast = document.createElement("div");
+    toast.className = `portal-toast ${type}`;
+    toast.innerHTML = `<i class="fas ${type === "success" ? "fa-circle-check" : "fa-circle-exclamation"}"></i><span>${message}</span>`;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.classList.add("hide"); setTimeout(() => toast.remove(), 300); }, 3500);
+}
+
+function setupBulkActions() {
+    const toggle = document.getElementById("bulkActionToggle");
+    const menu = document.getElementById("bulkActionMenu");
+    if (!toggle || !menu) return;
+    toggle.addEventListener("click", () => {
+        const isOpen = menu.classList.toggle("open");
+        toggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelectorAll("[data-bulk-status]").forEach(button => {
+        button.addEventListener("click", () => {
+            const status = button.dataset.bulkStatus;
+            if (status === "Broadcasted" || status === "Unbroadcasted") {
+                openBulkPasswordModal(status);
+            } else {
+                updateAllEvents(status);
+            }
+        });
+    });
+}
+
+function updateAllEvents(status) {
+    const events = getLocalEvents().map(e => ({ ...e, event_status: status }));
+    saveLocalEvents(events);
+
+    showPortalToast(
+        `Successfully ${status === "Broadcasted" ? "broadcasted" : "unbroadcasted"} all events.`,
+        status === "Broadcasted" ? "broadcast-success" : "unbroadcast-success"
+    );
+    fetchAllEvents();
+}
+
+function openBulkPasswordModal(status) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay bulk-password-modal";
+    overlay.innerHTML = `<div class="modal-content" style="max-width:420px"><div class="modal-header"><h2><i class="fas fa-lock"></i> Confirm Bulk Action</h2><button class="close-btn" type="button">&times;</button></div><p class="modal-subtitle">Enter the security password to update all events.</p><form><div class="form-group"><label for="bulkPassword">Password</label><input type="password" id="bulkPassword" autocomplete="off" required></div><p class="bulk-password-error" style="display:none;color:#ff5555;margin-top:1rem">Invalid password.</p><button type="submit" class="submit-event-btn"><i class="fas fa-check"></i> Confirm</button></form></div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector(".close-btn").addEventListener("click", close);
+    overlay.addEventListener("click", event => { if (event.target === overlay) close(); });
+    overlay.querySelector("form").addEventListener("submit", event => {
+        event.preventDefault();
+        const errorEl = overlay.querySelector(".bulk-password-error");
+        if (overlay.querySelector("#bulkPassword").value !== "aws-atm") { errorEl.style.display = "block"; return; }
+        
+        updateAllEvents(status);
+        close();
+    });
+}
+
+function setupSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebarOverlay");
+    const menuButton = document.getElementById("menuToggleBtn");
+    const closeButton = document.getElementById("sidebarCloseBtn");
+
+    if (!sidebar || !overlay || !menuButton) return;
+
+    const closeSidebar = () => {
+        sidebar.classList.remove("open");
+        overlay.classList.remove("open");
+        menuButton.setAttribute("aria-expanded", "false");
+    };
+
+    menuButton.addEventListener("click", () => {
+        sidebar.classList.add("open");
+        overlay.classList.add("open");
+        menuButton.setAttribute("aria-expanded", "true");
+    });
+    closeButton?.addEventListener("click", closeSidebar);
+    overlay.addEventListener("click", closeSidebar);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    setupSidebar();
+    setupBulkActions();
     const savedTheme = localStorage.getItem("theme");
+
     if (savedTheme === "light") {
         document.body.classList.add("light-mode");
         document.querySelector(".theme-toggle i").className = "fas fa-sun";
     }
 
-    // Update page title based on filter
-    const urlParams = new URLSearchParams(window.location.search);
-    const filter = urlParams.get('filter');
+    selectedFilter = new URLSearchParams(window.location.search).get("filter") || "";
+
     const titleEl = document.querySelector(".dashboard-title h1");
+
+    const titles = {
+        all: "TOTAL EVENTS",
+        broadcasted: "BROADCASTED EVENTS",
+        unbroadcasted: "UNBROADCASTED EVENTS",
+        upcoming: "UPCOMING EVENTS (3 Days)"
+    };
+
     if (titleEl) {
-        const titles = {
-            "active": "ACTIVE EVENTS",
-            "broadcasted": "BROADCASTED EVENTS",
-            "unbroadcasted": "UNBROADCASTED EVENTS",
-            "upcoming": "UPCOMING EVENTS (3 Days)"
-        };
-        if (filter && titles[filter]) {
-            titleEl.textContent = titles[filter];
-        } else {
-            titleEl.textContent = "ALL EVENTS";
-        }
+        titleEl.textContent = titles[selectedFilter] || "TOTAL EVENTS";
     }
+
+    document
+        .getElementById("searchInput")
+        .addEventListener("input", searchCards);
+
+    document
+        .getElementById("searchBtn")
+        .addEventListener("click", searchCards);
 
     fetchAllEvents();
 });
