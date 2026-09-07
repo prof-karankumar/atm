@@ -120,17 +120,6 @@
         .action-btn.stop-btn { background: #FF9800; }
         .action-btn.delete-btn { background: #ff4444; }
         .action-btn.edit-btn { background: #9C27B0; }
-        .back-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: #026CDF;
-            text-decoration: none;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            transition: gap 0.3s;
-        }
-        .back-link:hover { gap: 0.8rem; }
         @media (max-width: 768px) {
             .info-grid { grid-template-columns: 1fr; }
             .event-hero { height: 250px; }
@@ -140,24 +129,19 @@
 </head>
 <body>
 
-    <!-- Navbar -->
-    <nav class="navbar">
-        <h1>🎫 TicketPortal</h1>
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="total-events.html">Total Events</a>
-            <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">
-                <i class="fas fa-moon"></i>
-            </button>
-        </div>
-    </nav>
+    <div class="app-shell">
+    <nav class="navbar"><div class="brand"><span class="brand-ticket">🎫</span><span>Ticket<span>Portal</span></span></div><div class="nav-links"><a href="index.html">Home</a><a href="total-events.html">Total Events</a><a href="index.html#addEventNavBtn">Add</a><button class="theme-toggle" onclick="toggleTheme()"><i class="fas fa-moon"></i></button></div></nav>
+    <aside class="sidebar"><div class="sidebar-inner"><div class="sidebar-label">QUICK TOOLS</div><button class="sidebar-action" type="button" onclick="alert('Bulk action selection can be connected to your multi-event workflow here.')"><span class="sidebar-icon"><i class="fas fa-layer-group"></i></span><span><strong>Bulk Actions</strong><small>Manage multiple events</small></span><i class="fas fa-chevron-right sidebar-chevron"></i></button></div></aside>
 
     <!-- Event Details -->
+    <main class="main-content">
     <div class="event-detail-container" id="eventDetailContainer">
         <a href="total-events.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to All Events</a>
         <div id="eventContent">
             <p style="color: var(--subtext-color);">Loading event details...</p>
         </div>
+    </div>
+    </main>
     </div>
 
     <!-- Edit Modal -->
